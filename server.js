@@ -20,14 +20,23 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/e-dealer')
   .then(() => console.log('✅ MongoDB connected successfully'))
   .catch(err => console.log('❌ MongoDB connection error:', err));
 
-// Basic route - FIXED: Added missing closing brace
+// Basic route
 app.get('/', (req, res) => {
   res.json({ message: '🚀 E-Dealer Backend is running!' });
-}); // ← This was missing
+});
+
+// Health check route for deployment monitoring
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    message: 'Server is healthy',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Routes
 app.use('/api/auth', require('./src/routes/auth'));
@@ -35,17 +44,30 @@ app.use('/api/properties', require('./src/routes/properties'));
 // app.use('/api/users', require('./src/routes/users'));
 // app.use('/api/bookings', require('./src/routes/bookings'));
 
+// 404 handler for undefined routes
+app.use('*', (req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  res.status(500).json({ 
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'production' ? {} : err.message
+  });
 });
 
+// Use Railway's PORT environment variable, fallback to 5000 for local development
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🎯 Server running on port ${PORT}`);
-  console.log(`📍 http://localhost:${PORT}`);
-});
 
-// REMOVE THIS DUPLICATE LINE:
-// const cors = require('cors');
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🎯 Server running on port ${PORT}`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🚀 Production server deployed on Railway`);
+  } else {
+    console.log(`🔧 Development server: http://localhost:${PORT}`);
+  }
+});
