@@ -5,19 +5,24 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const admin = require('firebase-admin');
-const router = express.Router();
 
-// Initialize Firebase Admin SDK (only once in your backend)
+let admin = null; // 👈 Placeholder for Firebase Admin (optional)
 try {
+  // Try loading firebase-admin if installed
+  admin = require('firebase-admin');
+
+  // Initialize Firebase Admin SDK (only once)
   if (!admin.apps.length) {
     admin.initializeApp({
-      credential: admin.credential.applicationDefault()
+      credential: admin.credential.applicationDefault(),
     });
   }
+  console.log('✅ Firebase Admin initialized successfully');
 } catch (error) {
-  console.error('Firebase admin initialization error:', error);
+  console.warn('⚠️ Firebase Admin not found or failed to initialize — skipping Firebase integration.');
 }
+
+const router = express.Router();
 
 // ============================
 // 🔹 REGISTER ENDPOINT
@@ -31,7 +36,7 @@ router.post('/register', async (req, res) => {
       phone,
       role,
       firebaseUid,
-      profileImageUrl
+      profileImageUrl,
     } = req.body;
 
     // ✅ Validate required fields
@@ -45,12 +50,10 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    // ✅ Optional Firebase token verification (for extra security)
-    // Uncomment if frontend sends Bearer token in headers:
+    // ✅ Optional Firebase token verification
     /*
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const idToken = authHeader.split(' ')[1];
+    if (admin && req.headers.authorization?.startsWith('Bearer ')) {
+      const idToken = req.headers.authorization.split(' ')[1];
       await admin.auth().verifyIdToken(idToken);
     }
     */
@@ -68,7 +71,7 @@ router.post('/register', async (req, res) => {
 
     await user.save();
 
-    // ✅ Generate JWT token for backend sessions
+    // ✅ Generate JWT token
     const token = jwt.sign(
       { userId: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'fallback-secret',
@@ -85,8 +88,8 @@ router.post('/register', async (req, res) => {
         phone: user.phone,
         role: user.role,
         firebaseUid: user.firebaseUid,
-        profileImageUrl: user.profileImageUrl
-      }
+        profileImageUrl: user.profileImageUrl,
+      },
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -101,24 +104,20 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // ✅ Check required fields
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // ✅ Find user
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // ✅ Validate password
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // ✅ Generate JWT
     const token = jwt.sign(
       { userId: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET || 'fallback-secret',
@@ -135,8 +134,8 @@ router.post('/login', async (req, res) => {
         phone: user.phone,
         role: user.role,
         firebaseUid: user.firebaseUid,
-        profileImageUrl: user.profileImageUrl
-      }
+        profileImageUrl: user.profileImageUrl,
+      },
     });
   } catch (error) {
     console.error('Login error:', error);
