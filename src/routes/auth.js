@@ -29,40 +29,42 @@ const router = express.Router();
 // ============================
 router.post('/register', async (req, res) => {
   try {
+    // Accept frontend’s possible field names
     const {
       email,
+      userEmail,
       password,
+      userPassword,
       name,
+      fullName,
       phone,
       role,
       firebaseUid,
-      profileImageUrl,
+      profileImageUrl
     } = req.body;
 
+    // Normalize field names
+    const finalEmail = email || userEmail;
+    const finalPassword = password || userPassword;
+    const finalName = name || fullName;
+
     // ✅ Validate required fields
-    if (!email || !password || !name) {
+    if (!finalEmail || !finalPassword || !finalName) {
+      console.log('🛑 Missing fields in request body:', req.body);
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
     // ✅ Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: finalEmail });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    // ✅ Optional Firebase token verification
-    /*
-    if (admin && req.headers.authorization?.startsWith('Bearer ')) {
-      const idToken = req.headers.authorization.split(' ')[1];
-      await admin.auth().verifyIdToken(idToken);
-    }
-    */
-
     // ✅ Create new user
     const user = new User({
-      email,
-      password,
-      name,
+      email: finalEmail,
+      password: finalPassword,
+      name: finalName,
       phone,
       role: role || 'tenant',
       firebaseUid,
@@ -88,8 +90,8 @@ router.post('/register', async (req, res) => {
         phone: user.phone,
         role: user.role,
         firebaseUid: user.firebaseUid,
-        profileImageUrl: user.profileImageUrl,
-      },
+        profileImageUrl: user.profileImageUrl
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
