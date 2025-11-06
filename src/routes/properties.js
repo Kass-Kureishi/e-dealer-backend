@@ -1,91 +1,38 @@
-// ✅ Backend base URL
-const API_BASE_URL = "https://e-dealer-backend-production.up.railway.app/api";
+// src/routes/properties.js
+const express = require("express");
+const router = express.Router();
+const Property = require("../models/Property");
 
-// Utility: Show message
-function showMessage(msg, isError = false) {
-  const messageBox = document.getElementById("message");
-  if (!messageBox) return;
-  messageBox.textContent = msg;
-  messageBox.style.color = isError ? "red" : "green";
-  messageBox.style.display = "block";
-  setTimeout(() => (messageBox.style.display = "none"), 4000);
-}
-
-// ✅ Add Property Function
-async function addProperty(event) {
-  event.preventDefault();
-
-  const form = document.getElementById("addPropertyForm");
-  const formData = new FormData(form);
-
-  const propertyData = {
-    title: formData.get("title"),
-    description: formData.get("description"),
-    price: parseFloat(formData.get("price")),
-    city: formData.get("city"),
-    address: formData.get("address"),
-    bedrooms: parseInt(formData.get("bedrooms")),
-    bathrooms: parseInt(formData.get("bathrooms")),
-    area: parseFloat(formData.get("area")),
-    type: formData.get("type"),
-    amenities: formData.getAll("amenities"),
-    imageUrls: formData.get("imageUrls")?.split(",").map((u) => u.trim()) || [],
-  };
-
+// GET all properties
+router.get("/", async (req, res) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/properties`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(propertyData),
-    });
-
-    if (!response.ok) throw new Error("Failed to add property.");
-
-    const data = await response.json();
-    showMessage("✅ Property added successfully!");
-    console.log("Property added:", data);
-
-    form.reset();
-  } catch (error) {
-    console.error(error);
-    showMessage("❌ Error adding property: " + error.message, true);
+    const properties = await Property.find();
+    res.status(200).json({ properties });
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching properties", error: err.message });
   }
-}
-
-// ✅ Fetch All Properties
-async function loadProperties() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/properties`);
-    if (!response.ok) throw new Error("Failed to fetch properties.");
-
-    const data = await response.json();
-    const properties = data.properties || [];
-
-    const container = document.getElementById("propertiesList");
-    if (!container) return;
-
-    container.innerHTML = properties
-      .map(
-        (prop) => `
-      <div class="property-card">
-        <img src="${prop.images?.[0] || "default.jpg"}" alt="${prop.title}" />
-        <h3>${prop.title}</h3>
-        <p>${prop.description}</p>
-        <p><b>City:</b> ${prop.location?.city || "N/A"}</p>
-        <p><b>Price:</b> ${prop.price} ${prop.currency || ""}</p>
-      </div>`
-      )
-      .join("");
-  } catch (error) {
-    console.error(error);
-    showMessage("❌ Error fetching properties.", true);
-  }
-}
-
-// ✅ Event Listeners
-document.addEventListener("DOMContentLoaded", () => {
-  const form = document.getElementById("addPropertyForm");
-  if (form) form.addEventListener("submit", addProperty);
-
-  loadProperties();
 });
+
+// POST create a property
+router.post("/", async (req, res) => {
+  try {
+    const property = new Property(req.body);
+    await property.save();
+    res.status(201).json(property);
+  } catch (err) {
+    res.status(400).json({ message: "Error adding property", error: err.message });
+  }
+});
+
+// GET property by ID
+router.get("/:id", async (req, res) => {
+  try {
+    const property = await Property.findById(req.params.id);
+    if (!property) return res.status(404).json({ message: "Property not found" });
+    res.status(200).json(property);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching property", error: err.message });
+  }
+});
+
+module.exports = router;
