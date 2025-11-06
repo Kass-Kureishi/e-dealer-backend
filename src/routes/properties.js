@@ -1,137 +1,91 @@
-// ==========================================
-//  E-DEALER PROPERTY ROUTES (Fixed + Clean)
-// ==========================================
+// ✅ Backend base URL
+const API_BASE_URL = "https://e-dealer-backend-production.up.railway.app/api";
 
-const express = require('express');
-const Property = require('../models/Property');
-const authMiddleware = require('../middleware/auth');
+// Utility: Show message
+function showMessage(msg, isError = false) {
+  const messageBox = document.getElementById("message");
+  if (!messageBox) return;
+  messageBox.textContent = msg;
+  messageBox.style.color = isError ? "red" : "green";
+  messageBox.style.display = "block";
+  setTimeout(() => (messageBox.style.display = "none"), 4000);
+}
 
-const router = express.Router();
+// ✅ Add Property Function
+async function addProperty(event) {
+  event.preventDefault();
 
-// ============================
-// 🔹 GET ALL PROPERTIES (with filters)
-// ============================
-router.get('/', async (req, res) => {
+  const form = document.getElementById("addPropertyForm");
+  const formData = new FormData(form);
+
+  const propertyData = {
+    title: formData.get("title"),
+    description: formData.get("description"),
+    price: parseFloat(formData.get("price")),
+    city: formData.get("city"),
+    address: formData.get("address"),
+    bedrooms: parseInt(formData.get("bedrooms")),
+    bathrooms: parseInt(formData.get("bathrooms")),
+    area: parseFloat(formData.get("area")),
+    type: formData.get("type"),
+    amenities: formData.getAll("amenities"),
+    imageUrls: formData.get("imageUrls")?.split(",").map((u) => u.trim()) || [],
+  };
+
   try {
-    const {
-      type,
-      city,
-      minPrice,
-      maxPrice,
-      bedrooms,
-      page = 1,
-      limit = 10,
-      search
-    } = req.query;
-
-    const filter = { status: { $in: ['available', 'Available'] } };
-
-    if (type) filter.type = type;
-    if (city) filter['location.city'] = new RegExp(city, 'i');
-
-    if (minPrice || maxPrice) {
-      filter.price = {};
-      if (minPrice) filter.price.$gte = parseInt(minPrice);
-      if (maxPrice) filter.price.$lte = parseInt(maxPrice);
-    }
-
-    if (bedrooms) filter['features.bedrooms'] = parseInt(bedrooms);
-
-    if (search) {
-      filter.$or = [
-        { title: new RegExp(search, 'i') },
-        { description: new RegExp(search, 'i') },
-        { 'location.address': new RegExp(search, 'i') },
-        { 'location.city': new RegExp(search, 'i') }
-      ];
-    }
-
-    const properties = await Property.find(filter)
-      .populate('owner', 'profile firstName lastName email')
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .sort({ createdAt: -1 });
-
-    const total = await Property.countDocuments(filter);
-
-    res.json({
-      properties,
-      totalPages: Math.ceil(total / limit),
-      currentPage: parseInt(page),
-      total
+    const response = await fetch(`${API_BASE_URL}/properties`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(propertyData),
     });
-  } catch (error) {
-    console.error('❌ Error fetching properties:', error);
-    res.status(500).json({ message: 'Error fetching properties', error: error.message });
-  }
-});
 
-// ============================
-// 🔹 GET SINGLE PROPERTY BY ID
-// ============================
-router.get('/:id', async (req, res) => {
+    if (!response.ok) throw new Error("Failed to add property.");
+
+    const data = await response.json();
+    showMessage("✅ Property added successfully!");
+    console.log("Property added:", data);
+
+    form.reset();
+  } catch (error) {
+    console.error(error);
+    showMessage("❌ Error adding property: " + error.message, true);
+  }
+}
+
+// ✅ Fetch All Properties
+async function loadProperties() {
   try {
-    const property = await Property.findById(req.params.id)
-      .populate('owner', 'profile firstName lastName email');
+    const response = await fetch(`${API_BASE_URL}/properties`);
+    if (!response.ok) throw new Error("Failed to fetch properties.");
 
-    if (!property) {
-      return res.status(404).json({ message: 'Property not found' });
-    }
+    const data = await response.json();
+    const properties = data.properties || [];
 
-    res.json(property);
+    const container = document.getElementById("propertiesList");
+    if (!container) return;
+
+    container.innerHTML = properties
+      .map(
+        (prop) => `
+      <div class="property-card">
+        <img src="${prop.images?.[0] || "default.jpg"}" alt="${prop.title}" />
+        <h3>${prop.title}</h3>
+        <p>${prop.description}</p>
+        <p><b>City:</b> ${prop.location?.city || "N/A"}</p>
+        <p><b>Price:</b> ${prop.price} ${prop.currency || ""}</p>
+      </div>`
+      )
+      .join("");
   } catch (error) {
-    console.error('❌ Error fetching property:', error);
-    res.status(500).json({ message: 'Error fetching property', error: error.message });
+    console.error(error);
+    showMessage("❌ Error fetching properties.", true);
   }
+}
+
+// ✅ Event Listeners
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("addPropertyForm");
+  if (form) form.addEventListener("submit", addProperty);
+
+  loadProperties();
 });
-
-// ============================
-// 🔹 CREATE NEW PROPERTY (Protected Later)
-// ============================
-// For now this works without JWT, but you can later enable: router.post('/', authMiddleware, async...)
-router.post('/', async (req, res) => {
-  try {
-    const propertyData = {
-      ...req.body,
-      owner: req.body.owner || "68ea8f21ef9c8255b45cb4eb" // Mock user ID for now
-    };
-
-    const property = new Property(propertyData);
-    await property.save();
-    await property.populate('owner', 'profile firstName lastName email');
-
-    res.status(201).json({
-      message: '✅ Property added successfully',
-      property
-    });
-  } catch (error) {
-    console.error('❌ Error creating property:', error);
-    res.status(500).json({ message: 'Error creating property', error: error.message });
-  }
-});
-
-// ============================
-// 🔹 ALIAS: /add → same as POST /
-// ============================
-router.post('/add', async (req, res) => {
-  try {
-    const propertyData = {
-      ...req.body,
-      owner: req.body.owner || "68ea8f21ef9c8255b45cb4eb"
-    };
-
-    const property = new Property(propertyData);
-    await property.save();
-    await property.populate('owner', 'profile firstName lastName email');
-
-    res.status(201).json({
-      message: '✅ Property added successfully (via /add)',
-      property
-    });
-  } catch (error) {
-    console.error('❌ Error creating property via /add:', error);
-    res.status(500).json({ message: 'Error creating property', error: error.message });
-  }
-});
-
-module.exports = router;
