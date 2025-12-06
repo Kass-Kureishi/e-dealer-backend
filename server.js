@@ -16,6 +16,7 @@ app.use(cors({
   origin: [
     'https://e-dealer-e7889.web.app',
     'https://e-dealer-e7889.firebaseapp.com',
+    'https://e-dealer-82386172-34d9d.web.app',
     'http://localhost:3000', // for local testing
     'https://e-dealer-backend-production.up.railway.app'
   ],
